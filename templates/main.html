@@ -4,8 +4,10 @@
 </head>
 
 <body>
-   <h1>Device Listing and Status</h1>
-
+   <h1>What did I do</h1>
+   <p>{{ action }}</p>
+   <p>{{ param }}</p>
+   
    {% for pin in pins %}
    <p>The {{ pins[pin].name }}
    {% if pins[pin].state == true %}
