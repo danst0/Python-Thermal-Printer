@@ -1,4 +1,4 @@
-## Base from http://mattrichardson.com/Raspberry-Pi-Flask/
+## Base from http://mattrichardson.com/Raspberry-Pi-Flask/ and main.py from Adafruit ThermalPrinter
 
 import RPi.GPIO as GPIO
 from flask import Flask, render_template, request
@@ -8,9 +8,7 @@ from __future__ import print_function
 import subprocess, time, Image, socket
 from Adafruit_Thermal import *
 
-ledPin       = 18
-buttonPin    = 23
-holdTime     = 2     # Duration for button hold (shutdown)
+
 tapTime      = 0.01  # Debounce time for button taps
 nextInterval = 0.0   # Time of next recurring operation
 dailyFlag    = False # Set after daily trigger occurs
@@ -209,9 +207,11 @@ class MyThermalPrinter(Adafruit_Thermal):
 if __name__ == "__main__":
    config = configparser.ConfigParser()
    config.read('thermo.conf')
-   
+   ledPin       = config['Printer']['ledPin']
+buttonPin    = config['Printer']['buttonPin']
+holdTime     = config['Printer']['timeout_for_hold']     # Duration for button hold (shutdown)
    # Initialization of printer
-	printer      = MyThermalPrinter("/dev/ttyAMA0", 19200, timeout=5)
+	printer      = MyThermalPrinter(config['Printer']['serial_port'], 19200, timeout=5)
    # Use Broadcom pin numbers (not Raspberry Pi pin numbers) for GPIO
    GPIO.setmode(GPIO.BCM)
 
