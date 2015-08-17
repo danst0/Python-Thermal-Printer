@@ -2,6 +2,7 @@
 
 import RPi.GPIO as GPIO
 from flask import Flask, render_template, request
+import configparser
 app = Flask(__name__)
 
 GPIO.setmode(GPIO.BCM)
@@ -29,9 +30,12 @@ def main():
    # Pass the template data into the template main.html and return it to the user
    return render_template('main.html', **templateData)
 
-# The function below is executed when someone requests a URL with the pin number and action in it:
-@app.route("/<changePin>/<action>")
-def action(changePin, action):
+# The function below is executed when someone requests a URL with secret_key, action and param
+@app.route("/<secret_key>/<action>/<param>")
+def action(secret_key, action, param):
+   if secret_key == config['api']['secret_key']:
+      # key is correct, so continue
+      pass
    # Convert the pin from the URL into an integer:
    changePin = int(changePin)
    # Get the device name for the pin being changed:
@@ -63,4 +67,6 @@ def action(changePin, action):
    return render_template('main.html', **templateData)
 
 if __name__ == "__main__":
+   config = configparser.ConfigParser()
+   config.read('thermo.conf')
    app.run(host='0.0.0.0', port=80, debug=True)
