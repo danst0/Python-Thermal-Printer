@@ -46,7 +46,39 @@ def action(secret_key, action, param):
 
    return render_template('main.html', **templateData)
 
+
+class Scheduler(object):
+    def __init__(self, sleep_time, function):
+        self.sleep_time = sleep_time
+        self.function = function
+        self._t = None
+
+    def start(self):
+        if self._t is None:
+            self._t = Timer(self.sleep_time, self._run)
+            self._t.start()
+        else:
+            raise Exception("this timer is already running")
+
+    def _run(self):
+        self.function()
+        self._t = Timer(self.sleep_time, self._run)
+        self._t.start()
+
+    def stop(self):
+        if self._t is not None:
+            self._t.cancel()
+            self._t = None
+
+
+def query_button():
+    print "Query a button"
+
+
 if __name__ == "__main__":
    config = configparser.ConfigParser()
    config.read('thermo.conf')
+   scheduler = Scheduler(5, query_button)
+   scheduler.start()
    app.run(host='0.0.0.0', port=80, debug=True)
+   scheduler.stop()
