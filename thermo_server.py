@@ -1,12 +1,34 @@
-## Base from http://mattrichardson.com/Raspberry-Pi-Flask/ and main.py from Adafruit ThermalPrinter
+#!/usr/local/bin/python3
+"""Central server to combine several functions around the
+Thermal Printer.
+1) Server to receive tasks by IfThisThanThat (ifttt.com), requires
+a internet connection and publicly available domain.
 
-import RPi.GPIO as GPIO
+2) Controller over the Thermal Printer hardware (together with
+Adafruit_Thermal) and one additional button and one LED
+
+3) Scheduler to execute regular prints, e.g. for updates for important
+mails, RSS-feeds, tweets (controlled by a config file)
+
+Credits:
+Original version based on 
+* http://mattrichardson.com/Raspberry-Pi-Flask/,
+* main.py from Adafruit ThermalPrinter on GitHub,
+* MailReceiver, http://stackoverflow.com/questions/8307809/save-email-attachment-python3-pop3-ssl-gmail, https://gist.github.com/vwillcox/5090214, https://gist.github.com/baali/2633554
+"""
+
+from __future__ import print_function
 from flask import Flask, render_template, request
 import configparser
-app = Flask(__name__)
-from __future__ import print_function
-import subprocess, time, Image, socket
+import subprocess
+import time
+from PIL import Image
+import socket
 from Adafruit_Thermal import *
+import RPi.GPIO as GPIO
+import imaplib
+import email
+import os
 
 
 tapTime      = 0.01  # Debounce time for button taps
