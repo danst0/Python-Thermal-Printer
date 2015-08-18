@@ -96,39 +96,47 @@ class Scheduler(object):
             self._t = None
 
 class PrinterTasks():
-    # Called when button is briefly tapped.  Invokes time/temperature script.
-    def tap():
-  	GPIO.output(ledPin, GPIO.HIGH)  # LED on while working
-  	subprocess.call(["python", "timetemp.py"])
-  	GPIO.output(ledPin, GPIO.LOW)
 
+    def __init__(self, led_pin):
+        self.led_pin = led_pin
+    
+    def tap(self):
+        """Called when button is briefly tapped.  Invokes time/temperature script."""
+        GPIO.output(self.led_pin, GPIO.HIGH)  # LED on while working
+        subprocess.call(["python", "timetemp.py"])
+        GPIO.output(self.led_pin, GPIO.LOW)
 
-    # Called when button is held down.  Prints image, invokes shutdown process.
-    def hold():
-    	GPIO.output(ledPin, GPIO.HIGH)
+    def hold(self):
+        """Called when button is held down.  Prints image, invokes shutdown process."""
+        GPIO.output(self.led_pin, GPIO.HIGH)
   	printer.printImage(Image.open('gfx/goodbye.png'), True)
   	printer.feed(3)
   	subprocess.call("sync")
   	subprocess.call(["shutdown", "-h", "now"])
-  	GPIO.output(ledPin, GPIO.LOW)
+        GPIO.output(self.led_pin, GPIO.LOW)
 
-    # Called at periodic intervals (30 seconds by default).
-    # Invokes twitter script.
-    def interval():
-  	GPIO.output(ledPin, GPIO.HIGH)
+
+    def interval(self):
+        """Called at periodic intervals (30 seconds by default).
+            Invokes twitter script.
+        """
+        GPIO.output(self.led_pin, GPIO.HIGH)
   	p = subprocess.Popen(["python", "twitter.py", str(lastId)],
     		stdout=subprocess.PIPE)
-  	GPIO.output(ledPin, GPIO.LOW)
+        GPIO.output(self.led_pin, GPIO.LOW)
   	return p.communicate()[0] # Script pipes back lastId, returned to main
 
 
-    # Called once per day (6:30am by default).
-    # Invokes weather forecast and sudoku-gfx scripts.
-    def daily():
-  	GPIO.output(ledPin, GPIO.HIGH)
+    
+    def daily(self):
+        """ Called once per day (6:30am by default).
+        
+            Invokes weather forecast and sudoku-gfx scripts.
+        """
+        GPIO.output(self.led_pin, GPIO.HIGH)
   	subprocess.call(["python", "forecast.py"])
   	subprocess.call(["python", "sudoku-gfx.py"])
-  	GPIO.output(ledPin, GPIO.LOW)
+        GPIO.output(self.led_pin, GPIO.LOW)
 
 class MyThermalPrinter(Adafruit_Thermal):
    """Thermal Printer class with added button and LED"""
