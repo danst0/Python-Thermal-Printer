@@ -318,26 +318,37 @@ class MailReceiver(object):
                 
 
 if __name__ == "__main__":
-   config = configparser.ConfigParser()
-   config.read('thermo.conf')
-   ledPin       = config['Printer']['ledPin']
-buttonPin    = config['Printer']['buttonPin']
-holdTime     = config['Printer']['timeout_for_hold']     # Duration for button hold (shutdown)
-   # Initialization of printer
-	printer      = MyThermalPrinter(config['Printer']['serial_port'], 19200, timeout=5)
    # Use Broadcom pin numbers (not Raspberry Pi pin numbers) for GPIO
    GPIO.setmode(GPIO.BCM)
+    config = configparser.ConfigParser()
+    config.read('thermo.conf')
+    LED_PIN = config['Printer']['ledPin']
+    BUTTON_PIN = config['Printer']['buttonPin']
+    HOLD_TIME = config['Printer']['timeout_for_hold']     # Duration for button hold (shutdown)
 
+    WR = WebRequest(__name__)
+    ACTIONS = PrinterTasks(LED_PIN)
+    # Initialization of printer
+    try:
+        PRINTER = MyThermalPrinter(config['Printer']['serial_port'],
+                                   19200, timeout=5,
+                                   button_pin = BUTTON_PIN,
+                                   hold_time = HOLD_TIME
+                                   actions = ACTIONS)
+    except:
+        print('No printer available.')
+        exit(1)
+    PRINTER.check_network()
+    PRINTER.greeting()
+    
+    MR = MailReceiver(config['EMail']['user'],
+                      config['EMail']['password'], PRINTER)
+    mail_schedule = Scheduler(30, MR.check_mail)
+    mail_schedule.start()
    
-	printer.check_network()
    
-	printer.greeting()
-   
-
-
-
-   
-   scheduler = Scheduler(5, query_button)
-   scheduler.start()
-   app.run(host='0.0.0.0', port=80, debug=True)
-   scheduler.stop()
+    todo_schedule = Scheduler(5, PRINTER.query_button)
+    todo_schedule.start()
+    WR.run()
+    todo_schedule.stop()
+    mail_schedule.stop()
