@@ -234,6 +234,89 @@ class MyThermalPrinter(Adafruit_Thermal):
 	      dailyFlag = False  # Reset daily trigger
 
 
+class MailReceiver(object):
+    def __init__(self, user, password, printter):
+        self.savedir="/tmp"
+        self.user = user
+        self.password = password
+        self.printer = printer
+
+    def check_mail(self):
+        # Icloud mail
+        # Benutzername: Dies ist in der Regel der Namensteil Ihrer
+        # iCloud-E-Mail-Adresse (beispielsweise emilyparker, nicht
+        # emilyparker@icloud.com). Wenn Ihr E-Mail-Client bei Verwendung
+        # des Namensteils Ihrer iCloud-E-Mail-Adresse keine Verbindung zu 
+        # iCloud herstellen kann, probieren Sie, die vollst‰ndige Adresse
+        # zu verwenden.
+        # Kennwort: Ihr iCloud-Kennwort (app specific!!!)
+        imap_session = imaplib.IMAP4_SSL('imap.mail.me.com', 993)
+        imap_session.login(self.user, self.password)
+        imap_session.select('inbox')
+        
+        
+        
+        
+        typ, data = imap_session.search(None, 'ALL')
+        if typ != 'OK':
+            print 'Error searching Inbox.'
+            raise
+    
+        # Iterating over all emails
+        for msgId in data[0].split():
+            typ, message_parts = imap_session.fetch(msgId, '(RFC822)')
+            if typ != 'OK':
+                print 'Error fetching mail.'
+                raise
+
+            email_body = message_parts[0][1]
+            mail = email.message_from_string(email_body)
+            subject = mail['subject']
+            sender = mail['from']
+            sender = sender.replace('<','')
+            sender = sender.replace('>','')
+            print('Subject {0}, From: {1}'.format(subject, sender))
+            for part in mail.walk():
+                if part.get_content_maintype() == 'multipart':
+                    # print part.as_string()
+                    continue
+                if part.get('Content-Disposition') is None:
+                    # print part.as_string()
+                    continue
+                file_name = part.get_filename()
+
+                if file_name:
+                    print file_name
+                    fp = open(os.path.join(self.savedir, file_name), 'wb')
+                    fp.write(part.get_payload(decode=True))
+                    fp.close()
+        #mail.expunge()
+          
+        imap_session.close()
+        imap_session.logout()
+        
+        
+
+ 
+        if message_no_image:
+            self.printer.bold_on()
+            self.printer.print_line(subject_line)
+            self.printer.bold_off()
+            if mail_text:
+                self.printer.print(mail_text)
+        elif message_with_image:
+            self.printer.bold_on()
+            self.printer.print_line(subject_line)
+            self.printer.bold_off()
+            self.printer.print(mail_text)
+            my_image = Image.open(os.path.join(self.savedir, filename))
+            new_width = 384
+            percentage = new_width/float(my_image.size[0])
+            new_height = my_image.size[1] * percentage
+            my_image = my_image.resize( [new_width, new_height] )
+            self.printer.print_image(my_image, True)
+                
+
 if __name__ == "__main__":
    config = configparser.ConfigParser()
    config.read('thermo.conf')
