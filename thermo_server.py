@@ -141,21 +141,26 @@ class PrinterTasks():
 class MyThermalPrinter(Adafruit_Thermal):
    """Thermal Printer class with added button and LED"""
    
-   # old init
       # Poll initial button state and time
-   self.prevButtonState = GPIO.input(buttonPin)
+
+    def __init__(self, *args, **kwargs):
+        self.button_pin = kwargs.pop('button_pin')
+        self.actions = kwargs.pop('actions')
+        self.hold_time = kwargs.pop('hold_time')
+        super().__init__(*args, **kwargs)
+        # Enable LED and button (w/pull-up on latter)
+        self.prevButtonState = GPIO.input(self.button_pin)
    self.prevTime        = time.time()
    self.tapEnable       = False
    self.holdEnable      = False
 
-	def __init__(self, args)
-		# Enable LED and button (w/pull-up on latter)
-   		GPIO.setup(ledPin, GPIO.OUT)
-   		GPIO.setup(buttonPin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-		super(args)
+        GPIO.setup(LED_PIN, GPIO.OUT)
+        GPIO.setup(self.button_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+
 	def check_network(self):
 		# LED on while working
-		   GPIO.output(ledPin, GPIO.HIGH)
+        GPIO.output(LED_PIN, GPIO.HIGH)
 		
 		   # Processor load is heavy at startup; wait a moment to avoid
 		   # stalling during greeting.
