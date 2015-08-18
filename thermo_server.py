@@ -247,7 +247,7 @@ class MailReceiver(object):
         # iCloud-E-Mail-Adresse (beispielsweise emilyparker, nicht
         # emilyparker@icloud.com). Wenn Ihr E-Mail-Client bei Verwendung
         # des Namensteils Ihrer iCloud-E-Mail-Adresse keine Verbindung zu 
-        # iCloud herstellen kann, probieren Sie, die vollst‰ndige Adresse
+        # iCloud herstellen kann, probieren Sie, die vollständige Adresse
         # zu verwenden.
         # Kennwort: Ihr iCloud-Kennwort (app specific!!!)
         imap_session = imaplib.IMAP4_SSL('imap.mail.me.com', 993)
