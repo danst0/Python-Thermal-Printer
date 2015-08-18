@@ -173,21 +173,23 @@ class MyThermalPrinter(Adafruit_Thermal):
 		   	printer.print('My IP address is ' + s.getsockname()[0])
 			   printer.feed(3)
 		   except:
-		   	printer.boldOn()
-			   printer.println('Network is unreachable.')
-		   	printer.boldOff()
-		   	printer.print('Connect display and keyboard\n'
+            printer.bold_on()
+            printer.print_line('Network is unreachable.')
+            printer.bold_off()
+            printer.print('Connect display and keyboard\n' + \
 		   	  'for network troubleshooting.')
 		   	printer.feed(3)
 		   	exit(0)
+
 	def greeting(self):
 		# Print greeting image
-		   printer.printImage(Image.open('gfx/hello.png'), True)
+        printer.print_image(Image.open('gfx/hello.png'), True)
 		   printer.feed(3)
-		   GPIO.output(ledPin, GPIO.LOW)
+        GPIO.output(LED_PIN, GPIO.LOW)
+
 	def query_button(self):
 	   # Poll current button state and time
-	   buttonState = GPIO.input(buttonPin)
+        buttonState = GPIO.input(self.button_pin)
 	   t           = time.time()
 	
 	   # Has button state changed?
