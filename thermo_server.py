@@ -31,45 +31,45 @@ import email
 import os
 
 
-tapTime      = 0.01  # Debounce time for button taps
+tapTime = 0.01  # Debounce time for button taps
 nextInterval = 0.0   # Time of next recurring operation
-dailyFlag    = False # Set after daily trigger occurs
-lastId       = '1'   # State information passed to/from interval script
+dailyFlag = False  # Set after daily trigger occurs
+lastId = '1'   # State information passed to/from interval script
 
 
 class WebRequest():
     def __init__(self, name):
         self.app = Flask(name)
-
+    
     def run():
         self.app.run(host='0.0.0.0', port=80, debug=True)
-
-@app.route("/")
+    
+    @app.route("/")
     def main(self):
-   # For each pin, read the pin state and store it in the pins dictionary:
-   for pin in pins:
-      pins[pin]['state'] = GPIO.input(pin)
-   # Put the pin dictionary into the template data dictionary:
+        # For each pin, read the pin state and store it in the pins dictionary:
+        for pin in pins:
+            pins[pin]['state'] = GPIO.input(pin)
+        # Put the pin dictionary into the template data dictionary:
         templateData = {'pins': pins}
         # Pass the template data into the template main.html and
         # return it to the user
-   return render_template('main.html', **templateData)
+        return render_template('main.html', **templateData)
 
-@app.route("/<secret_key>/<action>/<param>")
+     @app.route("/<secret_key>/<action>/<param>")
      def action(self, secret_key, action, param):
          """Executed when someone requests a URL with secret_key, action and param"""
-   if secret_key == config['api']['secret_key']:
-      # key is correct, so continue
-      if action == 'print':
-         thermo_print(param)
-         
-   # Along with the pin dictionary, put the message into the template data dictionary:
-   templateData = {
-      'action' : action,
-      'param' : param
-   }
+        if secret_key == config['api']['secret_key']:
+            # key is correct, so continue
+            if action == 'print':
+                thermo_print(param)
+             
+        # Along with the pin dictionary, put the message into the template data dictionary:
+        templateData = {
+            'action' : action,
+            'param' : param
+        }
 
-   return render_template('main.html', **templateData)
+        return render_template('main.html', **templateData)
 
 
 class Scheduler(object):
@@ -96,7 +96,7 @@ class Scheduler(object):
             self._t = None
 
 class PrinterTasks():
-
+    
     def __init__(self, led_pin):
         self.led_pin = led_pin
     
@@ -109,22 +109,22 @@ class PrinterTasks():
     def hold(self):
         """Called when button is held down.  Prints image, invokes shutdown process."""
         GPIO.output(self.led_pin, GPIO.HIGH)
-  	printer.printImage(Image.open('gfx/goodbye.png'), True)
-  	printer.feed(3)
-  	subprocess.call("sync")
-  	subprocess.call(["shutdown", "-h", "now"])
+        printer.printImage(Image.open('gfx/goodbye.png'), True)
+        printer.feed(3)
+        subprocess.call("sync")
+        subprocess.call(["shutdown", "-h", "now"])
         GPIO.output(self.led_pin, GPIO.LOW)
 
-
+    
     def interval(self):
         """Called at periodic intervals (30 seconds by default).
             Invokes twitter script.
         """
         GPIO.output(self.led_pin, GPIO.HIGH)
-  	p = subprocess.Popen(["python", "twitter.py", str(lastId)],
-    		stdout=subprocess.PIPE)
+        p = subprocess.Popen(["python", "twitter.py", str(lastId)],
+                stdout=subprocess.PIPE)
         GPIO.output(self.led_pin, GPIO.LOW)
-  	return p.communicate()[0] # Script pipes back lastId, returned to main
+        return p.communicate()[0] # Script pipes back lastId, returned to main
 
 
     
@@ -134,14 +134,14 @@ class PrinterTasks():
             Invokes weather forecast and sudoku-gfx scripts.
         """
         GPIO.output(self.led_pin, GPIO.HIGH)
-  	subprocess.call(["python", "forecast.py"])
-  	subprocess.call(["python", "sudoku-gfx.py"])
+        subprocess.call(["python", "forecast.py"])
+        subprocess.call(["python", "sudoku-gfx.py"])
         GPIO.output(self.led_pin, GPIO.LOW)
 
 class MyThermalPrinter(Adafruit_Thermal):
-   """Thermal Printer class with added button and LED"""
-   
-      # Poll initial button state and time
+    """Thermal Printer class with added button and LED"""
+
+    # Poll initial button state and time
 
     def __init__(self, *args, **kwargs):
         self.button_pin = kwargs.pop('button_pin')
@@ -150,88 +150,88 @@ class MyThermalPrinter(Adafruit_Thermal):
         super().__init__(*args, **kwargs)
         # Enable LED and button (w/pull-up on latter)
         self.prevButtonState = GPIO.input(self.button_pin)
-   self.prevTime        = time.time()
-   self.tapEnable       = False
-   self.holdEnable      = False
+        self.prevTime = time.time()
+        self.tapEnable = False
+        self.holdEnable = False
 
         GPIO.setup(LED_PIN, GPIO.OUT)
         GPIO.setup(self.button_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
 
-	def check_network(self):
-		# LED on while working
+    def check_network(self):
+        # LED on while working
         GPIO.output(LED_PIN, GPIO.HIGH)
-		
-		   # Processor load is heavy at startup; wait a moment to avoid
-		   # stalling during greeting.
-		   time.sleep(30)
-		
-		   # Show IP address (if network is available)
-		   try:
-			   s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-			   s.connect(('8.8.8.8', 0))
-		   	printer.print('My IP address is ' + s.getsockname()[0])
-			   printer.feed(3)
-		   except:
+
+        # Processor load is heavy at startup; wait a moment to avoid
+        # stalling during greeting.
+        time.sleep(30)
+
+        # Show IP address (if network is available)
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(('8.8.8.8', 0))
+            printer.print('My IP address is ' + s.getsockname()[0])
+            printer.feed(3)
+        except:
             printer.bold_on()
             printer.print_line('Network is unreachable.')
             printer.bold_off()
             printer.print('Connect display and keyboard\n' + \
-		   	  'for network troubleshooting.')
-		   	printer.feed(3)
-		   	exit(0)
+                          'for network troubleshooting.')
+            printer.feed(3)
+            exit(0)
 
-	def greeting(self):
-		# Print greeting image
+    def greeting(self):
+        # Print greeting image
         printer.print_image(Image.open('gfx/hello.png'), True)
-		   printer.feed(3)
+        printer.feed(3)
         GPIO.output(LED_PIN, GPIO.LOW)
 
-	def query_button(self):
-	   # Poll current button state and time
+    def query_button(self):
+        # Poll current button state and time
         buttonState = GPIO.input(self.button_pin)
-	   t           = time.time()
-	
-	   # Has button state changed?
-	   if buttonState != prevButtonState:
-	      prevButtonState = buttonState   # Yes, save new state/time
-	      prevTime        = t
-	   else:                             # Button state unchanged
+        t = time.time()
+
+        # Has button state changed?
+        if buttonState != prevButtonState:
+            prevButtonState = buttonState   # Yes, save new state/time
+            prevTime = t
+        else:                             # Button state unchanged
             if (t - prevTime) >= HOLD_TIME:  # Button held more than 'holdTime'?
-	       # Yes it has.  Is the hold action as-yet untriggered?
-	      if holdEnable == True:        # Yep!
+                # Yes it has.  Is the hold action as-yet untriggered?
+                if holdEnable == True:        # Yep!
                     self.actions.hold()                      # Perform hold action (usu. shutdown)
-	         holdEnable = False          # 1 shot...don't repeat hold action
-	         tapEnable  = False          # Don't do tap action on release
-	      elif (t - prevTime) >= tapTime: # Not holdTime.  tapTime elapsed?
-	         # Yes.  Debounced press or release...
-	         if buttonState == True:       # Button released?
-	            if tapEnable == True:       # Ignore if prior hold()
+                    holdEnable = False          # 1 shot...don't repeat hold action
+                    tapEnable  = False          # Don't do tap action on release
+            elif (t - prevTime) >= tapTime: # Not holdTime.  tapTime elapsed?
+                # Yes.  Debounced press or release...
+                if buttonState == True:       # Button released?
+                    if tapEnable == True:       # Ignore if prior hold()
                         self.actions.tap()                     # Tap triggered (button released)
-	               tapEnable  = False        # Disable tap and hold
-	               holdEnable = False
-	         else:                         # Button pressed
-	            tapEnable  = True           # Enable tap and hold actions
-	            holdEnable = True
-	
-	  # LED blinks while idle, for a brief interval every 2 seconds.
-	  # Pin 18 is PWM-capable and a "sleep throb" would be nice, but
-	  # the PWM-related library is a hassle for average users to install
-	  # right now.  Might return to this later when it's more accessible.
-	   if ((int(t) & 1) == 0) and ((t - int(t)) < 0.15):
+                        tapEnable  = False        # Disable tap and hold
+                        holdEnable = False
+                else:                         # Button pressed
+                    tapEnable  = True           # Enable tap and hold actions
+                    holdEnable = True
+
+        # LED blinks while idle, for a brief interval every 2 seconds.
+        # Pin 18 is PWM-capable and a "sleep throb" would be nice, but
+        # the PWM-related library is a hassle for average users to install
+        # right now.  Might return to this later when it's more accessible.
+        if ((int(t) & 1) == 0) and ((t - int(t)) < 0.15):
             GPIO.output(LED_PIN, GPIO.HIGH)
-	   else:
+        else:
             GPIO.output(LED_PIN, GPIO.LOW)
-	
-	   # Once per day (currently set for 6:30am local time, or when script
-	   # is first run, if after 6:30am), run forecast and sudoku scripts.
+
+        # Once per day (currently set for 6:30am local time, or when script
+        # is first run, if after 6:30am), run forecast and sudoku scripts.
         loc_time = time.localtime()
         if loc_time.tm_hour ==  6 and loc_time.tm_min == 30:
-	      if dailyFlag == False:
+            if dailyFlag == False:
                 self.actions.daily()
-	         dailyFlag = True
-	   else:
-	      dailyFlag = False  # Reset daily trigger
+                dailyFlag = True
+        else:
+            dailyFlag = False  # Reset daily trigger
 
 
 class MailReceiver(object):
@@ -318,8 +318,8 @@ class MailReceiver(object):
                 
 
 if __name__ == "__main__":
-   # Use Broadcom pin numbers (not Raspberry Pi pin numbers) for GPIO
-   GPIO.setmode(GPIO.BCM)
+    # Use Broadcom pin numbers (not Raspberry Pi pin numbers) for GPIO
+    GPIO.setmode(GPIO.BCM)
     config = configparser.ConfigParser()
     config.read('thermo.conf')
     LED_PIN = config['Printer']['ledPin']
