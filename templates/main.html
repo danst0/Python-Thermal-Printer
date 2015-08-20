@@ -1,13 +1,16 @@
 <!DOCTYPE html>
 <head>
-   <title>Current Status</title>
+   <title>Current Status -- [Th]ermal [Pr]inter</title>
 </head>
 
 <body>
-   <h1>What did I do</h1>
-   <p>{{ action }}</p>
-   <p>{{ param }}</p>
-   
+    {% if not action %}
+        <h1>Nothing to do</h1>
+    {% else %}
+        <h1>Summary of my actions</h1>
+        <p>{{ action }}</p>
+        <p>{{ param }}</p>
+   {% endif %}
    {% for pin in pins %}
    <p>The {{ pins[pin].name }}
    {% if pins[pin].state == true %}

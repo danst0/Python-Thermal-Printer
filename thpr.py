@@ -37,39 +37,36 @@ from threading import Timer
 lastId = '1'   # State information passed to/from interval script
 webapp = Flask(__name__)
 
-class WebRequest():
-    def __init__(self, name):
-        pass
-    
-    def run(self):
-        webapp.run(host='0.0.0.0', port=80, debug=True)
-    
-    @webapp.route("/")
-    def main(self):
-        # For each pin, read the pin state and store it in the pins dictionary:
-        for pin in pins:
-            pins[pin]['state'] = GPIO.input(pin)
-        # Put the pin dictionary into the template data dictionary:
-        templateData = {'pins': pins}
-        # Pass the template data into the template main.html and
-        # return it to the user
-        return render_template('main.html', **templateData)
 
-    @webapp.route("/<secret_key>/<action>/<param>")
-    def action(self, secret_key, action, param):
-        """Executed when someone requests a URL with secret_key, action and param"""
-        if secret_key == config['api']['secret_key']:
-            # key is correct, so continue
-            if action == 'print':
-                thermo_print(param)
-             
-        # Along with the pin dictionary, put the message into the template data dictionary:
-        templateData = {
-            'action' : action,
-            'param' : param
-        }
+    
+@webapp.route("/")
+def main():
+    # For each pin, read the pin state and store it in the pins dictionary:
+    #for pin in pins:
+    #    pins[pin]['state'] = GPIO.input(pin)
+    # Put the pin dictionary into the template data dictionary:
+    #templateData = {'pins': pins}
+    # Pass the template data into the template main.html and
+    # return it to the user
+    return render_template('main.html')#, **templateData)
 
-        return render_template('main.html', **templateData)
+@webapp.route("/<secret_key>/<action>/<param>")
+def action(secret_key, action, param):
+    """Executed when someone requests a URL with secret_key, action and param"""
+    if secret_key == config['api']['secret_key']:
+        # key is correct, so continue
+        if action == 'print':
+            pass
+            print('Here I would do something')
+            #thermo_print(param)
+         
+    # Along with the pin dictionary, put the message into the template data dictionary:
+    templateData = {
+        'action' : action,
+        'param' : param
+    }
+
+    return render_template('main.html', **templateData)
 
 
 class Scheduler(object):
@@ -257,6 +254,7 @@ class MailReceiver(object):
         self.user = user
         self.password = password
         self.printer = printer
+        self.valid_senders = ['daniel@dumke.me']
 
     def check_mail(self):
         # Icloud mail
@@ -270,8 +268,6 @@ class MailReceiver(object):
         imap_session = imaplib.IMAP4_SSL('imap.mail.me.com', 993)
         imap_session.login(self.user, self.password)
         imap_session.select('inbox')
-        
-        
         
         
         typ, data = imap_session.search(None, 'ALL')
@@ -292,21 +288,26 @@ class MailReceiver(object):
             sender = mail['from']
             sender = sender.replace('<','')
             sender = sender.replace('>','')
-            print('Subject {0}, From: {1}'.format(subject, sender))
-            for part in mail.walk():
-                if part.get_content_maintype() == 'multipart':
-                    # print part.as_string()
-                    continue
-                if part.get('Content-Disposition') is None:
-                    # print part.as_string()
-                    continue
-                file_name = part.get_filename()
+            found_valid_sender = False
+            for val in self.valid_senders:
+                if sender.find(val) != -1:
+                    found_valid_sender = True
+            if found_valid_sender:
+                print('Subject {0}, From: {1}'.format(subject, sender))
+                for part in mail.walk():
+                    if part.get_content_maintype() == 'multipart':
+                        # print part.as_string()
+                        continue
+                    if part.get('Content-Disposition') is None:
+                        # print part.as_string()
+                        continue
+                    file_name = part.get_filename()
 
-                if file_name:
-                    print(file_name)
-                    fp = open(os.path.join(self.savedir, file_name), 'wb')
-                    fp.write(part.get_payload(decode=True))
-                    fp.close()
+                    if file_name:
+                        print(file_name)
+                        fp = open(os.path.join(self.savedir, file_name), 'wb')
+                        fp.write(part.get_payload(decode=True))
+                        fp.close()
         #mail.expunge()
           
         imap_session.close()
@@ -338,12 +339,11 @@ if __name__ == "__main__":
     # Use Broadcom pin numbers (not Raspberry Pi pin numbers) for GPIO
     GPIO.setmode(GPIO.BCM)
     config = configparser.ConfigParser()
-    config.read('thermo.conf')
+    config.read('thpr.conf')
     LED_PIN = config['Printer']['ledPin']
     BUTTON_PIN = config['Printer']['buttonPin']
     HOLD_TIME = config['Printer']['timeout_for_hold']     # Duration for button hold (shutdown)
 
-    WR = WebRequest(__name__)
     ACTIONS = PrinterTasks(LED_PIN)
     # Initialization of printer
 
@@ -368,6 +368,6 @@ if __name__ == "__main__":
    
     todo_schedule = Scheduler(5, PRINTER.query_button)
     todo_schedule.start()
-    WR.run()
+    webapp.run(host='0.0.0.0', port=80, debug=True)
     todo_schedule.stop()
     mail_schedule.stop()
