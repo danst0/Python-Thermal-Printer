@@ -167,9 +167,6 @@ class MyThermalPrinter(Adafruit_Thermal):
 
 
     def check_network(self):
-        # LED on while working
-        GPIO.output(LED_PIN, GPIO.HIGH)
-
         # Processor load is heavy at startup; wait a moment to avoid
         # stalling during greeting.
         time.sleep(30)
