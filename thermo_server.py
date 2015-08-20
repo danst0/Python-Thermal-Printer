@@ -145,9 +145,9 @@ class MyThermalPrinter(Adafruit_Thermal):
     # Poll initial button state and time
 
     def __init__(self, *args, **kwargs):
-        self.button_pin = kwargs.pop('button_pin')
+        self.button_pin = int(kwargs.pop('button_pin'))
         self.actions = kwargs.pop('actions')
-        self.hold_time = kwargs.pop('hold_time')
+        self.hold_time = int(kwargs.pop('hold_time'))
         self.available = True
         try:
             super().__init__(*args, **kwargs)
