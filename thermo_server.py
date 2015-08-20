@@ -251,7 +251,7 @@ class MyThermalPrinter(Adafruit_Thermal):
 
 
 class MailReceiver(object):
-    def __init__(self, user, password, printter):
+    def __init__(self, user, password, printer):
         self.savedir="/tmp"
         self.user = user
         self.password = password
