@@ -148,7 +148,11 @@ class MyThermalPrinter(Adafruit_Thermal):
         self.button_pin = kwargs.pop('button_pin')
         self.actions = kwargs.pop('actions')
         self.hold_time = kwargs.pop('hold_time')
-        super().__init__(*args, **kwargs)
+        self.available = True
+        try:
+            super().__init__(*args, **kwargs)
+        except:
+            self.available = False
         # Enable LED and button (w/pull-up on latter)
         self.prevButtonState = GPIO.input(self.button_pin)
         self.prevTime = time.time()
@@ -171,21 +175,25 @@ class MyThermalPrinter(Adafruit_Thermal):
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.connect(('8.8.8.8', 0))
-            printer.print('My IP address is ' + s.getsockname()[0])
-            printer.feed(3)
+            if self.available:
+                printer.print('My IP address is ' + s.getsockname()[0])
+                printer.feed(3)
         except:
-            printer.bold_on()
-            printer.print_line('Network is unreachable.')
-            printer.bold_off()
-            printer.print('Connect display and keyboard\n' + \
-                          'for network troubleshooting.')
-            printer.feed(3)
+            if self.available:
+                printer.bold_on()
+                printer.print_line('Network is unreachable.')
+                printer.bold_off()
+                printer.print('Connect display and keyboard\n' + \
+                              'for network troubleshooting.')
+                printer.feed(3)
             exit(0)
 
     def greeting(self):
+        GPIO.output(LED_PIN, GPIO.HIGH)
         # Print greeting image
-        printer.print_image(Image.open('gfx/hello.png'), True)
-        printer.feed(3)
+        if self.available:
+            printer.print_image(Image.open('gfx/hello.png'), True)
+            printer.feed(3)
         GPIO.output(LED_PIN, GPIO.LOW)
 
     def query_button(self):
@@ -330,15 +338,16 @@ if __name__ == "__main__":
     WR = WebRequest(__name__)
     ACTIONS = PrinterTasks(LED_PIN)
     # Initialization of printer
-    try:
-        PRINTER = MyThermalPrinter(config['Printer']['serial_port'],
-                                   19200, timeout=5,
-                                   button_pin = BUTTON_PIN,
-                                   hold_time = HOLD_TIME,
-                                   actions = ACTIONS)
-    except:
+
+    PRINTER = MyThermalPrinter(config['Printer']['serial_port'],
+                               19200, timeout=5,
+                               button_pin = BUTTON_PIN,
+                               hold_time = HOLD_TIME,
+                               actions = ACTIONS)
+    if not PRINTER.available:
         print('No printer available.')
-        exit(1)
+
+    
     PRINTER.check_network()
     PRINTER.greeting()
     
