@@ -179,25 +179,29 @@ class MyThermalPrinter(Adafruit_Thermal):
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.connect(('8.8.8.8', 0))
             if self.available:
+                GPIO.output(self.led_pin, GPIO.HIGH)
                 printer.print('My IP address is ' + s.getsockname()[0])
                 printer.feed(3)
+                GPIO.output(self.led_pin, GPIO.LOW)
         except:
             if self.available:
+                GPIO.output(self.led_pin, GPIO.HIGH)
                 printer.bold_on()
                 printer.print_line('Network is unreachable.')
                 printer.bold_off()
                 printer.print('Connect display and keyboard\n' + \
                               'for network troubleshooting.')
                 printer.feed(3)
+                GPIO.output(self.led_pin, GPIO.LOW)
             exit(0)
 
     def greeting(self):
-        GPIO.output(LED_PIN, GPIO.HIGH)
+        GPIO.output(self.led_pin, GPIO.HIGH)
         # Print greeting image
         if self.available:
             printer.print_image(Image.open('gfx/hello.png'), True)
             printer.feed(3)
-        GPIO.output(LED_PIN, GPIO.LOW)
+        GPIO.output(self.led_pin, GPIO.LOW)
 
     def query_button(self):
         # Poll current button state and time
@@ -231,9 +235,9 @@ class MyThermalPrinter(Adafruit_Thermal):
         # the PWM-related library is a hassle for average users to install
         # right now.  Might return to this later when it's more accessible.
         if ((int(t) & 1) == 0) and ((t - int(t)) < 0.15):
-            GPIO.output(LED_PIN, GPIO.HIGH)
+            GPIO.output(self.led_pin, GPIO.HIGH)
         else:
-            GPIO.output(LED_PIN, GPIO.LOW)
+            GPIO.output(self.led_pin, GPIO.LOW)
 
         # Once per day (currently set for 6:30am local time, or when script
         # is first run, if after 6:30am), run forecast and sudoku scripts.
@@ -345,6 +349,7 @@ if __name__ == "__main__":
     PRINTER = MyThermalPrinter(config['Printer']['serial_port'],
                                19200, timeout=5,
                                button_pin = BUTTON_PIN,
+                               led_pin = LED_PIN,
                                hold_time = HOLD_TIME,
                                actions = ACTIONS)
     if not PRINTER.available:
