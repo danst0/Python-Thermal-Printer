@@ -169,7 +169,8 @@ class MyThermalPrinter(Adafruit_Thermal):
     def check_network(self):
         # Processor load is heavy at startup; wait a moment to avoid
         # stalling during greeting.
-        time.sleep(30)
+        if self.available:
+            time.sleep(30)
 
         # Show IP address (if network is available)
         try:
@@ -178,6 +179,7 @@ class MyThermalPrinter(Adafruit_Thermal):
             if self.available:
                 GPIO.output(self.led_pin, GPIO.HIGH)
                 printer.print('My IP address is ' + s.getsockname()[0])
+                print('My IP address is ' + s.getsockname()[0])
                 printer.feed(3)
                 GPIO.output(self.led_pin, GPIO.LOW)
         except:
@@ -185,6 +187,7 @@ class MyThermalPrinter(Adafruit_Thermal):
                 GPIO.output(self.led_pin, GPIO.HIGH)
                 printer.bold_on()
                 printer.print_line('Network is unreachable.')
+                print('Network is unreachable.')
                 printer.bold_off()
                 printer.print('Connect display and keyboard\n' + \
                               'for network troubleshooting.')
