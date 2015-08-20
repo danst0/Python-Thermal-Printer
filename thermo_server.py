@@ -36,16 +36,16 @@ tapTime = 0.01  # Debounce time for button taps
 nextInterval = 0.0   # Time of next recurring operation
 dailyFlag = False  # Set after daily trigger occurs
 lastId = '1'   # State information passed to/from interval script
-
+webapp = Flask(__name__)
 
 class WebRequest():
     def __init__(self, name):
-        self.app = Flask(name)
+        pass
     
     def run():
-        self.app.run(host='0.0.0.0', port=80, debug=True)
+        webapp.run(host='0.0.0.0', port=80, debug=True)
     
-    @app.route("/")
+    @webapp.route("/")
     def main(self):
         # For each pin, read the pin state and store it in the pins dictionary:
         for pin in pins:
@@ -56,7 +56,7 @@ class WebRequest():
         # return it to the user
         return render_template('main.html', **templateData)
 
-    @app.route("/<secret_key>/<action>/<param>")
+    @webapp.route("/<secret_key>/<action>/<param>")
     def action(self, secret_key, action, param):
         """Executed when someone requests a URL with secret_key, action and param"""
         if secret_key == config['api']['secret_key']:
