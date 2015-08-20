@@ -33,9 +33,7 @@ import os
 from threading import Timer
 
 
-tapTime = 0.01  # Debounce time for button taps
-nextInterval = 0.0   # Time of next recurring operation
-dailyFlag = False  # Set after daily trigger occurs
+
 lastId = '1'   # State information passed to/from interval script
 webapp = Flask(__name__)
 
@@ -43,7 +41,7 @@ class WebRequest():
     def __init__(self, name):
         pass
     
-    def run():
+    def run(self):
         webapp.run(host='0.0.0.0', port=80, debug=True)
     
     @webapp.route("/")
@@ -151,6 +149,9 @@ class MyThermalPrinter(Adafruit_Thermal):
         self.actions = kwargs.pop('actions')
         self.hold_time = int(kwargs.pop('hold_time'))
         self.available = True
+        self.tap_time = 0.01  # Debounce time for button taps
+        self.next_interval = 0.0   # Time of next recurring operation
+        self.daily_flag = False  # Set after daily trigger occurs
         GPIO.setup(self.led_pin, GPIO.OUT)
         GPIO.setup(self.button_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
@@ -159,10 +160,10 @@ class MyThermalPrinter(Adafruit_Thermal):
         except:
             self.available = False
         # Enable LED and button (w/pull-up on latter)
-        self.prevButtonState = GPIO.input(self.button_pin)
-        self.prevTime = time.time()
-        self.tapEnable = False
-        self.holdEnable = False
+        self.prev_button_state = GPIO.input(self.button_pin)
+        self.prev_time = time.time()
+        self.tap_enable = False
+        self.hold_enable = False
 
 
 
@@ -206,30 +207,29 @@ class MyThermalPrinter(Adafruit_Thermal):
 
     def query_button(self):
         # Poll current button state and time
-        buttonState = GPIO.input(self.button_pin)
+        button_state = GPIO.input(self.button_pin)
         t = time.time()
 
         # Has button state changed?
-        if buttonState != prevButtonState:
-            prevButtonState = buttonState   # Yes, save new state/time
-            prevTime = t
+        if button_state != self.prev_button_state:
+            self.prev_button_state = button_state   # Yes, save new state/time
+            self.prev_time = t
         else:                             # Button state unchanged
-            if (t - prevTime) >= HOLD_TIME:  # Button held more than 'holdTime'?
+            if (t - self.prev_time) >= self.hold_time:  # Button held more than 'holdTime'?
                 # Yes it has.  Is the hold action as-yet untriggered?
-                if holdEnable == True:        # Yep!
+                if self.hold_enable == True:        # Yep!
                     self.actions.hold()                      # Perform hold action (usu. shutdown)
-                    holdEnable = False          # 1 shot...don't repeat hold action
-                    tapEnable  = False          # Don't do tap action on release
-            elif (t - prevTime) >= tapTime: # Not holdTime.  tapTime elapsed?
+                    self.hold_enable = False          # 1 shot...don't repeat hold action
+                    self.tap_enable  = False          # Don't do tap action on release
+            elif (t - self.prev_time) >= self.tap_time: # Not holdTime.  tapTime elapsed?
                 # Yes.  Debounced press or release...
-                if buttonState == True:       # Button released?
-                    if tapEnable == True:       # Ignore if prior hold()
+                if button_state == True:       # Button released?
+                    if self.tap_enable == True:       # Ignore if prior hold()
                         self.actions.tap()                     # Tap triggered (button released)
-                        tapEnable  = False        # Disable tap and hold
-                        holdEnable = False
+                        self.hold_enable = False
                 else:                         # Button pressed
-                    tapEnable  = True           # Enable tap and hold actions
-                    holdEnable = True
+                    self.tap_enable  = True           # Enable tap and hold actions
+                    self.hold_enable = True
 
         # LED blinks while idle, for a brief interval every 2 seconds.
         # Pin 18 is PWM-capable and a "sleep throb" would be nice, but
@@ -244,11 +244,11 @@ class MyThermalPrinter(Adafruit_Thermal):
         # is first run, if after 6:30am), run forecast and sudoku scripts.
         loc_time = time.localtime()
         if loc_time.tm_hour ==  6 and loc_time.tm_min == 30:
-            if dailyFlag == False:
+            if self.daily_flag == False:
                 self.actions.daily()
-                dailyFlag = True
+                self.daily_flag = True
         else:
-            dailyFlag = False  # Reset daily trigger
+            self.daily_flag = False  # Reset daily trigger
 
 
 class MailReceiver(object):
