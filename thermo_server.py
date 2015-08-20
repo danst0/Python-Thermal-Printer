@@ -146,9 +146,13 @@ class MyThermalPrinter(Adafruit_Thermal):
 
     def __init__(self, *args, **kwargs):
         self.button_pin = int(kwargs.pop('button_pin'))
+        self.led_pin = int(kwargs.pop('led_pin'))
         self.actions = kwargs.pop('actions')
         self.hold_time = int(kwargs.pop('hold_time'))
         self.available = True
+        GPIO.setup(self.led_pin, GPIO.OUT)
+        GPIO.setup(self.button_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
         try:
             super().__init__(*args, **kwargs)
         except:
@@ -159,8 +163,7 @@ class MyThermalPrinter(Adafruit_Thermal):
         self.tapEnable = False
         self.holdEnable = False
 
-        GPIO.setup(LED_PIN, GPIO.OUT)
-        GPIO.setup(self.button_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
 
 
     def check_network(self):
