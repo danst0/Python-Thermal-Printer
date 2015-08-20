@@ -1,4 +1,5 @@
-#!/usr/local/bin/python3
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """Central server to combine several functions around the
 Thermal Printer.
 1) Server to receive tasks by IfThisThanThat (ifttt.com), requires
@@ -55,9 +56,9 @@ class WebRequest():
         # return it to the user
         return render_template('main.html', **templateData)
 
-     @app.route("/<secret_key>/<action>/<param>")
-     def action(self, secret_key, action, param):
-         """Executed when someone requests a URL with secret_key, action and param"""
+    @app.route("/<secret_key>/<action>/<param>")
+    def action(self, secret_key, action, param):
+        """Executed when someone requests a URL with secret_key, action and param"""
         if secret_key == config['api']['secret_key']:
             # key is correct, so continue
             if action == 'print':
@@ -259,14 +260,14 @@ class MailReceiver(object):
         
         typ, data = imap_session.search(None, 'ALL')
         if typ != 'OK':
-            print 'Error searching Inbox.'
+            print('Error searching Inbox.')
             raise
     
         # Iterating over all emails
         for msgId in data[0].split():
             typ, message_parts = imap_session.fetch(msgId, '(RFC822)')
             if typ != 'OK':
-                print 'Error fetching mail.'
+                print('Error fetching mail.')
                 raise
 
             email_body = message_parts[0][1]
@@ -286,7 +287,7 @@ class MailReceiver(object):
                 file_name = part.get_filename()
 
                 if file_name:
-                    print file_name
+                    print(file_name)
                     fp = open(os.path.join(self.savedir, file_name), 'wb')
                     fp.write(part.get_payload(decode=True))
                     fp.close()
@@ -333,7 +334,7 @@ if __name__ == "__main__":
         PRINTER = MyThermalPrinter(config['Printer']['serial_port'],
                                    19200, timeout=5,
                                    button_pin = BUTTON_PIN,
-                                   hold_time = HOLD_TIME
+                                   hold_time = HOLD_TIME,
                                    actions = ACTIONS)
     except:
         print('No printer available.')
