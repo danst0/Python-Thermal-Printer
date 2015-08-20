@@ -30,6 +30,7 @@ import RPi.GPIO as GPIO
 import imaplib
 import email
 import os
+from threading import Timer
 
 
 tapTime = 0.01  # Debounce time for button taps
