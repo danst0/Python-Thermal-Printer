@@ -31,7 +31,8 @@ import imaplib
 import email
 import os
 from threading import Timer
-
+import uuid
+import shutil
 
 
 lastId = '1'   # State information passed to/from interval script
@@ -249,12 +250,20 @@ class MyThermalPrinter(Adafruit_Thermal):
 
 
 class MailReceiver(object):
-    def __init__(self, user, password, printer):
-        self.savedir="/tmp"
-        self.user = user
-        self.password = password
+    def __init__(self, config, printer):
+        self.base_dir = os.path.join('/tmp', 'thpr')
+        try:
+            shutil.rmtree(self.base_dir)
+        except:
+            pass
+        #os.makedirs(self.base_dir)
+        self.user = config['EMail']['user']
+        self.password = config['EMail']['password']
         self.printer = printer
-        self.valid_senders = ['daniel@dumke.me']
+        
+        self.valid_senders = [x[1].lower() for x in config.items('Valid senders')]
+        self.valid_recipients = [x[1].lower() for x in config.items('Valid recipients')]
+        self.printable_extensions = ['.jpg', '.jpeg', '.png']
 
     def check_mail(self):
         # Icloud mail
@@ -276,6 +285,8 @@ class MailReceiver(object):
             raise
     
         # Iterating over all emails
+        relevant_message = False
+        message_with_image = False
         for msgId in data[0].split():
             typ, message_parts = imap_session.fetch(msgId, '(RFC822)')
             if typ != 'OK':
@@ -286,14 +297,20 @@ class MailReceiver(object):
             mail = email.message_from_string(email_body)
             subject = mail['subject']
             sender = mail['from']
-            sender = sender.replace('<','')
-            sender = sender.replace('>','')
+            recipient = mail['to']
+            
+            found_valid_recipient = False
+            for val in self.valid_recipients:
+                    if recipient.lower().find(val) != -1:
+                        found_valid_recipient = True
+                        
             found_valid_sender = False
-            for val in self.valid_senders:
-                if sender.find(val) != -1:
-                    found_valid_sender = True
-            if found_valid_sender:
-                print('Subject {0}, From: {1}'.format(subject, sender))
+            if sender:
+                for val in self.valid_senders:
+                    if sender.lower().find(val) != -1:
+                        found_valid_sender = True
+            if found_valid_recipient and found_valid_sender:
+                print('Valid mail found: subject "{0}", From: {1}, To: {2}'.format(subject, sender, recipient))
                 for part in mail.walk():
                     if part.get_content_maintype() == 'multipart':
                         # print part.as_string()
@@ -305,34 +322,41 @@ class MailReceiver(object):
 
                     if file_name:
                         print(file_name)
-                        fp = open(os.path.join(self.savedir, file_name), 'wb')
-                        fp.write(part.get_payload(decode=True))
-                        fp.close()
-        #mail.expunge()
-          
+                        fn, file_extension = os.path.splitext(file_name)
+                        if file_extension.lower() in self.printable_extensions:
+                            message_with_image = True
+                            savedir = os.path.join(self.base_dir, uuid.uuid1().hex)
+                            os.makedirs(savedir)
+                            fp = open(os.path.join(savedir, file_name), 'wb')
+                            fp.write(part.get_payload(decode=True))
+                            fp.close()
+
+                if not message_with_image:
+                    if self.printer.available:
+                        self.printer.bold_on()
+                        self.printer.print_line(subject_line)
+                        self.printer.bold_off()
+                        if mail_text:
+                            self.printer.print(mail_text.strip())
+                else:
+                    if self.printer.available:
+                        self.printer.bold_on()
+                        self.printer.print_line(subject_line)
+                        self.printer.bold_off()
+                        self.printer.print(mail_text.strip())
+                        my_image = Image.open(os.path.join(self.savedir, filename))
+                        new_width = 384
+                        percentage = new_width/float(my_image.size[0])
+                        new_height = my_image.size[1] * percentage
+                        my_image = my_image.resize( [new_width, new_height] )
+                        self.printer.print_image(my_image, True)
+                #mail.expunge()
         imap_session.close()
         imap_session.logout()
         
         
 
- 
-        if message_no_image:
-            self.printer.bold_on()
-            self.printer.print_line(subject_line)
-            self.printer.bold_off()
-            if mail_text:
-                self.printer.print(mail_text)
-        elif message_with_image:
-            self.printer.bold_on()
-            self.printer.print_line(subject_line)
-            self.printer.bold_off()
-            self.printer.print(mail_text)
-            my_image = Image.open(os.path.join(self.savedir, filename))
-            new_width = 384
-            percentage = new_width/float(my_image.size[0])
-            new_height = my_image.size[1] * percentage
-            my_image = my_image.resize( [new_width, new_height] )
-            self.printer.print_image(my_image, True)
+        
                 
 
 if __name__ == "__main__":
@@ -360,8 +384,7 @@ if __name__ == "__main__":
     PRINTER.check_network()
     PRINTER.greeting()
     
-    MR = MailReceiver(config['EMail']['user'],
-                      config['EMail']['password'], PRINTER)
+    MR = MailReceiver(config, PRINTER)
     mail_schedule = Scheduler(30, MR.check_mail)
     mail_schedule.start()
    
