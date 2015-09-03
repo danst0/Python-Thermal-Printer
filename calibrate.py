@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/local/bin/python
 #
 # Thermal calibration utility for Adafruit_Thermal Python library.
 # Run this utility before using the printer for the first time, any
@@ -21,16 +21,18 @@
 # last good number.
 
 from __future__ import print_function
-from Adafruit_Thermal import *
+from AdafruitThermal import *
 
-printer = Adafruit_Thermal("/dev/ttyAMA0", 19200, timeout=5)
+printer = AdafruitThermal("/dev/cu.usbserial-AH02DXOC", 9600, timeout=5)
 
 for i in range(0,256,15):
-	printer.begin(i)
-	printer.println(i)                 # Print heat time
-	printer.inverseOn()
-	printer.print('{:^32}'.format('')) # Print 32 spaces (inverted)
-	printer.inverseOff()
+    print('Heat parameter is currently on {0}'.format(i))
+    printer.begin(i)
+    printer.print('helo')
+    printer.print_line(i)                 # Print heat time
+    printer.inverse_on()
+    printer.print('{:^32}'.format('')) # Print 32 spaces (inverted)
+    printer.inverse_off()
 
 printer.begin() # Reset heat time to default
 printer.feed(4)

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/local/bin/python
 
 # Weather forecast for Raspberry Pi w/Adafruit Mini Thermal Printer.
 # Retrieves data from Yahoo! weather, prints current conditions and
@@ -36,9 +36,9 @@ def forecast(idx):
 	printer.print(deg)
 	printer.print(' high ' + hi)
 	printer.print(deg)
-	printer.println(' ' + cond)
+	printer.print_line(' ' + cond)
 
-printer = Adafruit_Thermal("/dev/ttyAMA0", 19200, timeout=5)
+printer = Adafruit_Thermal("/dev/cu.usbserial-AH02DXOC", 19200, timeout=5)
 deg     = chr(0xf8) # Degree symbol on thermal printer
 
 # Fetch forecast data from Yahoo!, parse resulting XML
@@ -46,27 +46,27 @@ dom = parseString(urllib.urlopen(
         'http://weather.yahooapis.com/forecastrss?w=' + WOEID).read())
 
 # Print heading
-printer.inverseOn()
+printer.inverse_on()
 printer.print('{:^32}'.format(
   dom.getElementsByTagName('description')[0].firstChild.data))
-printer.inverseOff()
+printer.inverse_off()
 
 # Print current conditions
-printer.boldOn()
+printer.bold_on()
 printer.print('{:^32}'.format('Current conditions:'))
-printer.boldOff()
+printer.bold_off()
 printer.print('{:^32}'.format(
   dom.getElementsByTagName('pubDate')[0].firstChild.data))
 temp = dom.getElementsByTagName('yweather:condition')[0].getAttribute('temp')
 cond = dom.getElementsByTagName('yweather:condition')[0].getAttribute('text')
 printer.print(temp)
 printer.print(deg)
-printer.println(' ' + cond)
-printer.boldOn()
+printer.print_line(' ' + cond)
+printer.bold_on()
 
 # Print forecast
 printer.print('{:^32}'.format('Forecast:'))
-printer.boldOff()
+printer.bold_off()
 forecast(0)
 forecast(1)
 
