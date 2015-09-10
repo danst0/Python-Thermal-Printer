@@ -1,8 +1,8 @@
-#!/usr/local/bin/python
+#!/usr/bin/env python
 
 from AdafruitThermal import *
 
-printer = AdafruitThermal("/dev/cu.usbserial-AH02DXOC", 9600, timeout=5)
+printer = AdafruitThermal("/dev/ttyAMA0", 9600, timeout=5)
 
 
 

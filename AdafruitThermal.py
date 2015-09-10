@@ -64,6 +64,8 @@ class AdafruitThermal(Serial):
             args = [ args[0], baudrate ]
         else:
             baudrate = args[1]
+        self.no_printing = kwargs.pop('no_printing')
+        #print('NOPRINT', self.no_printing)
 
         # Calculate time to issue one byte to the printer.
         # 11 bits (not 8) to accommodate idle, start and stop bits.
@@ -103,6 +105,20 @@ class AdafruitThermal(Serial):
           20,       # Heat dots (20 = balance darkness w/no jams)
           heat_time, # Lib default = 45
           250)      # Heat interval (500 uS = slower but darker)
+
+
+        # Select German Character set
+        
+        self.write_bytes(
+          27,       # Esc
+          82,       # Select an international character set
+          2)      # 2: German, 0 USA
+
+        # Select character code table
+        self.write_bytes(
+          27,       # Esc
+          116,       # Select character code table
+          23)      # 23: ISO-8859-1 [West Europe]; 0: USA
 
         # Description of print density from page 23 of the manual:
         # DC2 # n Set printing density
@@ -168,42 +184,44 @@ class AdafruitThermal(Serial):
 
     # 'Raw' byte-writing method
     def write_bytes(self, *args):
-        self.timeout_wait()
-        self.timeout_set(len(args) * self.byte_time)
-        for arg in args:
-            super(AdafruitThermal, self).write(chr(arg))
+        if not self.no_printing:
+            self.timeout_wait()
+            self.timeout_set(len(args) * self.byte_time)
+            for arg in args:
+                super(AdafruitThermal, self).write(chr(arg))
 
 
     # Override write() method to keep track of paper feed.
     def write(self, *data):
-        for i in range(len(data)):
-            c = data[i]
-            if c != 0x13:
-                self.timeout_wait()
-                super(AdafruitThermal, self).write(c)
-                d = self.byte_time
-                if ((c == '\n') or
-                    (self.column == self.max_column)):
-                    # Newline or wrap
-                    if self.prev_byte == '\n':
-                        # Feed line (blank)
-                        d += ((self.char_height +
-                               self.line_spacing) *
-                              self.dot_feed_time)
+        if not self.no_printing:
+            for i in range(len(data)):
+                c = data[i]
+                if c != 0x13:
+                    self.timeout_wait()
+                    super(AdafruitThermal, self).write(c)
+                    d = self.byte_time
+                    if ((c == '\n') or
+                        (self.column == self.max_column)):
+                        # Newline or wrap
+                        if self.prev_byte == '\n':
+                            # Feed line (blank)
+                            d += ((self.char_height +
+                                   self.line_spacing) *
+                                  self.dot_feed_time)
+                        else:
+                            # Text line
+                            d += ((self.char_height *
+                                   self.dot_print_time) +
+                                  (self.line_spacing *
+                                   self.dot_feed_time))
+                            self.column = 0
+                            # Treat wrap as newline
+                            # on next pass
+                            c = '\n'
                     else:
-                        # Text line
-                        d += ((self.char_height *
-                               self.dot_print_time) +
-                              (self.line_spacing *
-                               self.dot_feed_time))
-                        self.column = 0
-                        # Treat wrap as newline
-                        # on next pass
-                        c = '\n'
-                else:
-                    self.column += 1
-                self.timeout_set(d)
-                self.prev_byte = c
+                        self.column += 1
+                    self.timeout_set(d)
+                    self.prev_byte = c
 
 
     # The bulk of this method was moved into __init__,
@@ -488,7 +506,7 @@ class AdafruitThermal(Serial):
                     bit >>= 1
                 bitmap[n + b] = sum
 
-        self.printBitmap(width, height, bitmap, LaaT)
+        self.print_bitmap(width, height, bitmap, LaaT)
 
 
     # Take the printer offline. Print commands sent after this

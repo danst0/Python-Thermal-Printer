@@ -1,6 +1,23 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Central server to combine several functions around the
+"""[Th]ermal [Pr]inter
+
+Usage:
+thpr.py [-s | --no-server] [-v | --verbose] [-d | --no-deleting] [-p | --no-printing]
+thpr.py (-h | --help)
+thpr.py --version
+
+Options:
+-h --help           Show this help
+--version           Show version
+-s --no-server      Do not start Web server
+-v --verbose          Enable debug logging
+-d --no-deleting   Do not delete mails after printing
+-p --no-printing   Do not print anything
+
+
+
+Central server to combine several functions around the
 Thermal Printer.
 1) Server to receive tasks by IfThisThanThat (ifttt.com), requires
 a internet connection and publicly available domain.
@@ -23,16 +40,23 @@ from flask import Flask, render_template, request
 import configparser
 import subprocess
 import time
-from PIL import Image
+from PIL import Image, ImageFilter
 import socket
-from Adafruit_Thermal import *
+from AdafruitThermal import *
 import RPi.GPIO as GPIO
 import imaplib
 import email
+from email.header import decode_header
 import os
 from threading import Timer
 import uuid
 import shutil
+import numpy as np
+from docopt import docopt
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 lastId = '1'   # State information passed to/from interval script
@@ -136,7 +160,7 @@ class PrinterTasks():
         subprocess.call(["python", "sudoku-gfx.py"])
         GPIO.output(self.led_pin, GPIO.LOW)
 
-class MyThermalPrinter(Adafruit_Thermal):
+class MyThermalPrinter:
     """Thermal Printer class with added button and LED"""
 
     # Poll initial button state and time
@@ -146,17 +170,15 @@ class MyThermalPrinter(Adafruit_Thermal):
         self.led_pin = int(kwargs.pop('led_pin'))
         self.actions = kwargs.pop('actions')
         self.hold_time = int(kwargs.pop('hold_time'))
+        
         self.available = True
         self.tap_time = 0.01  # Debounce time for button taps
         self.next_interval = 0.0   # Time of next recurring operation
         self.daily_flag = False  # Set after daily trigger occurs
         GPIO.setup(self.led_pin, GPIO.OUT)
         GPIO.setup(self.button_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-
-        try:
-            super().__init__(*args, **kwargs)
-        except:
-            self.available = False
+        self.tp = AdafruitThermal(*args, **kwargs)
+        #self.available = False
         # Enable LED and button (w/pull-up on latter)
         self.prev_button_state = GPIO.input(self.button_pin)
         self.prev_time = time.time()
@@ -170,7 +192,7 @@ class MyThermalPrinter(Adafruit_Thermal):
         # Processor load is heavy at startup; wait a moment to avoid
         # stalling during greeting.
         if self.available:
-            time.sleep(30)
+            time.sleep(0)
 
         # Show IP address (if network is available)
         try:
@@ -178,20 +200,20 @@ class MyThermalPrinter(Adafruit_Thermal):
             s.connect(('8.8.8.8', 0))
             if self.available:
                 GPIO.output(self.led_pin, GPIO.HIGH)
-                printer.print('My IP address is ' + s.getsockname()[0])
-                print('My IP address is ' + s.getsockname()[0])
-                printer.feed(3)
+                #self.tp.print_line('My IP address is ' + s.getsockname()[0])
+                logger.debug('My IP address is ' + s.getsockname()[0])
+                #self.tp.feed(3)
                 GPIO.output(self.led_pin, GPIO.LOW)
         except:
             if self.available:
                 GPIO.output(self.led_pin, GPIO.HIGH)
-                printer.bold_on()
-                printer.print_line('Network is unreachable.')
-                print('Network is unreachable.')
-                printer.bold_off()
-                printer.print('Connect display and keyboard\n' + \
+                self.tp.bold_on()
+                self.tp.print_line('Network is unreachable.')
+                logger.debug('Network is unreachable.')
+                self.tp.bold_off()
+                self.tp.print('Connect display and keyboard\n' + \
                               'for network troubleshooting.')
-                printer.feed(3)
+                self.tp.feed(3)
                 GPIO.output(self.led_pin, GPIO.LOW)
             exit(0)
 
@@ -199,8 +221,8 @@ class MyThermalPrinter(Adafruit_Thermal):
         GPIO.output(self.led_pin, GPIO.HIGH)
         # Print greeting image
         if self.available:
-            printer.print_image(Image.open('gfx/hello.png'), True)
-            printer.feed(3)
+            self.tp.print_image(Image.open('gfx/hello.png'), True)
+            self.tp.feed(3)
         GPIO.output(self.led_pin, GPIO.LOW)
 
     def query_button(self):
@@ -250,7 +272,7 @@ class MyThermalPrinter(Adafruit_Thermal):
 
 
 class MailReceiver(object):
-    def __init__(self, config, printer):
+    def __init__(self, config, printer, no_deleting=False):
         self.base_dir = os.path.join('/tmp', 'thpr')
         try:
             shutil.rmtree(self.base_dir)
@@ -260,6 +282,7 @@ class MailReceiver(object):
         self.user = config['EMail']['user']
         self.password = config['EMail']['password']
         self.printer = printer
+        self.no_deleting = no_deleting
         
         self.valid_senders = [x[1].lower() for x in config.items('Valid senders')]
         self.valid_recipients = [x[1].lower() for x in config.items('Valid recipients')]
@@ -287,6 +310,7 @@ class MailReceiver(object):
         # Iterating over all emails
         relevant_message = False
         message_with_image = False
+        to_be_deleted = []        
         for msgId in data[0].split():
             typ, message_parts = imap_session.fetch(msgId, '(RFC822)')
             if typ != 'OK':
@@ -295,102 +319,191 @@ class MailReceiver(object):
 
             email_body = message_parts[0][1]
             mail = email.message_from_string(email_body)
-            subject = mail['subject']
+            subject = decode_header(mail['subject'])[0]
+            logger.debug('Output from decode header: {0}, encoding {1}'.format(subject[0], subject[1]))
+            subject = subject[0]#.decode(subject[1])
+            logger.debug('Decoded subject {0}'.format(subject))            
             sender = mail['from']
             recipient = mail['to']
+            mail_text = None
+            #print('Mail found: subject "{0}", From: {1}, To: {2}'.format(subject, sender, recipient))
+            if sender != None and recipient != None:
             
-            found_valid_recipient = False
-            for val in self.valid_recipients:
-                    if recipient.lower().find(val) != -1:
-                        found_valid_recipient = True
+                found_valid_recipient = False
+                for val in self.valid_recipients:
+                        if recipient.lower().find(val) != -1:
+                            found_valid_recipient = True
                         
-            found_valid_sender = False
-            if sender:
-                for val in self.valid_senders:
-                    if sender.lower().find(val) != -1:
-                        found_valid_sender = True
-            if found_valid_recipient and found_valid_sender:
-                print('Valid mail found: subject "{0}", From: {1}, To: {2}'.format(subject, sender, recipient))
-                for part in mail.walk():
-                    if part.get_content_maintype() == 'multipart':
-                        # print part.as_string()
-                        continue
-                    if part.get('Content-Disposition') is None:
-                        # print part.as_string()
-                        continue
-                    file_name = part.get_filename()
+                found_valid_sender = False
+                if sender:
+                    for val in self.valid_senders:
+                        if sender.lower().find(val) != -1:
+                            found_valid_sender = True
 
-                    if file_name:
-                        print(file_name)
-                        fn, file_extension = os.path.splitext(file_name)
-                        if file_extension.lower() in self.printable_extensions:
-                            message_with_image = True
-                            savedir = os.path.join(self.base_dir, uuid.uuid1().hex)
-                            os.makedirs(savedir)
-                            fp = open(os.path.join(savedir, file_name), 'wb')
-                            fp.write(part.get_payload(decode=True))
-                            fp.close()
+                if found_valid_recipient and found_valid_sender:
+                    print('Valid mail found: subject "{0}", From: {1}, To: {2}'.format(subject, sender, recipient))
+                    if mail.is_multipart():
+                        mail_text = None
+                        file_name = None
+                        for num, part in enumerate(mail.walk()):
+                            logger.debug('---'*10)
+                            logger.debug('Part No. {0}, Content type: :::{1}:::'.format(num, part.get_content_type()))
+                            logger.debug('Part as string')
+                            logger.debug(part.as_string()[:100])
+                            logger.debug('Part payload')
+                            logger.debug(part.get_payload()[:100])
 
-                if not message_with_image:
-                    if self.printer.available:
+                            if not mail_text and part.get_content_type() == 'text/plain':
+                                mail_text = part.get_payload(decode=True).strip(' \n\r')
+                                
+                                logger.debug('MAILTEXT (Multipart; length: {1}): {0}'.format(mail_text[:100], len(mail_text)))
+                            if not file_name:
+                                file_name = part.get_filename()
+                                if file_name:
+                                    logger.debug('Filename: {0}'.format(file_name))
+                                    fn, file_extension = os.path.splitext(file_name)
+                                    if file_extension.lower() in self.printable_extensions:
+                                        message_with_image = True
+                                        savedir = os.path.join(self.base_dir, uuid.uuid1().hex)
+                                        os.makedirs(savedir)
+                                        fp = open(os.path.join(savedir, file_name), 'wb')
+                                        fp.write(part.get_payload(decode=True))
+                                        fp.close()
+                    else:
+                        file_name = mail.get_filename()
+                        if file_name:
+                            logger.debug('Filename: {0}'.format(file_name))
+                            fn, file_extension = os.path.splitext(file_name)
+                            if file_extension.lower() in self.printable_extensions:
+                                message_with_image = True
+                                savedir = os.path.join(self.base_dir, uuid.uuid1().hex)
+                                os.makedirs(savedir)
+                                fp = open(os.path.join(savedir, file_name), 'wb')
+                                fp.write(mail.get_payload(decode=True))
+                                fp.close()
+                        else:
+                            mail_text = mail.get_payload(decode=True).strip(' \n\r')
+                            logger.debug('MAILTEXT (Singlepart; length: {1}): {0}'.format(mail_text[:100], len(mail_text)))
+                    if not message_with_image:
+                        self.printer.justify('C')
+                        self.printer.print_line(20*'-')
                         self.printer.bold_on()
-                        self.printer.print_line(subject_line)
+                        self.printer.print_line(subject)
                         self.printer.bold_off()
                         if mail_text:
                             self.printer.print(mail_text.strip())
-                else:
-                    if self.printer.available:
+                        self.printer.print_line(20*'-')
+                        self.printer.justify('L')
+                    else:
+                        self.printer.justify('C')
+                        self.printer.print_line(20*'-')
                         self.printer.bold_on()
-                        self.printer.print_line(subject_line)
+                        self.printer.print_line(subject)
                         self.printer.bold_off()
-                        self.printer.print(mail_text.strip())
-                        my_image = Image.open(os.path.join(self.savedir, filename))
+                        if mail_text != None and mail_text != '':
+                            self.printer.print_line(mail_text)
+                        logger.debug('Directory ({0}) and name ({1})'.format(savedir, file_name))
+                        my_image = Image.open(os.path.join(savedir, file_name))
                         new_width = 384
                         percentage = new_width/float(my_image.size[0])
                         new_height = my_image.size[1] * percentage
-                        my_image = my_image.resize( [new_width, new_height] )
-                        self.printer.print_image(my_image, True)
-                #mail.expunge()
+                        #print('New width {0}, height {1}'.format(int(new_width+0.5), int(new_height+0.5)))
+                        gray = my_image.resize([int(new_width+0.5), int(new_height+0.5)]).convert('L')
+                        gray_array = np.asarray(gray)
+                        #bw = (gray_array > gray_array.mean())*255
+                        bw = gray.point(lambda x: 0 if x<np.median(gray_array)*1.1 else 255, '1').convert('1')
+                        bw.save(os.path.join('/tmp', 'convert_' + file_name + '.png'))
+#                         self.printer.print_image(bw, True)
+                        self.printer.print_line(20*'-')
+                        self.printer.justify('L')
+                    to_be_deleted.append(msgId)
+        if to_be_deleted and not self.no_deleting:
+            logger.debug('IDs to be moved to trash: {0}'.format(to_be_deleted))
+            boxes = imap_session.list()
+            #for box in boxes[1]:
+            #    print(box)
+            for id in to_be_deleted:
+                result = imap_session.copy(id, 'Deleted Messages')
+                print(result)
+                if result[0] == 'OK':
+                    imap_session.store(id, '+FLAGS', '\\Deleted')
+                    
+            imap_session.expunge()
+                
         imap_session.close()
-        imap_session.logout()
-        
+        imap_session.logout()        
         
 
         
                 
 
 if __name__ == "__main__":
+
+
     # Use Broadcom pin numbers (not Raspberry Pi pin numbers) for GPIO
+    arguments = docopt(__doc__, version='thpr.py 0.7')
+    ch = logging.StreamHandler()
+    
+    # create formatter and add it to the handlers
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    ch.setFormatter(formatter)
+
+    #print(arguments)
+    if arguments['--verbose']:
+        logger.setLevel(logging.DEBUG)
+        ch.setLevel(logging.DEBUG)
+    else:
+        logger.setLevel(logging.INFO)
+        ch.setLevel(logging.INFO)
+
+    # add the handlers to the logger
+    logger.addHandler(ch)
+
+
     GPIO.setmode(GPIO.BCM)
     config = configparser.ConfigParser()
     config.read('thpr.conf')
-    LED_PIN = config['Printer']['ledPin']
+    LED_PIN = int(config['Printer']['ledPin'])
     BUTTON_PIN = config['Printer']['buttonPin']
     HOLD_TIME = config['Printer']['timeout_for_hold']     # Duration for button hold (shutdown)
+
 
     ACTIONS = PrinterTasks(LED_PIN)
     # Initialization of printer
 
     PRINTER = MyThermalPrinter(config['Printer']['serial_port'],
-                               19200, timeout=5,
+                               9600, timeout=5,
                                button_pin = BUTTON_PIN,
                                led_pin = LED_PIN,
                                hold_time = HOLD_TIME,
-                               actions = ACTIONS)
+                               actions = ACTIONS,
+                               no_printing = arguments['--no-printing'])
+    GPIO.output(LED_PIN, GPIO.HIGH)
+    time.sleep(0.5)
+    GPIO.output(LED_PIN, GPIO.LOW)
+
     if not PRINTER.available:
         print('No printer available.')
 
     
     PRINTER.check_network()
-    PRINTER.greeting()
+    #PRINTER.greeting()
     
-    MR = MailReceiver(config, PRINTER)
-    mail_schedule = Scheduler(30, MR.check_mail)
-    mail_schedule.start()
+    MR = MailReceiver(config, PRINTER.tp, no_deleting = arguments['--no-deleting'])
+    MR.check_mail()
+    mail_schedule = Scheduler(60, MR.check_mail)
+    #mail_schedule.start()
    
    
     todo_schedule = Scheduler(5, PRINTER.query_button)
     todo_schedule.start()
-    webapp.run(host='0.0.0.0', port=80, debug=True)
+
+    if not arguments['--no-server']:
+        logger.debug('Starting server')
+        webapp.run(host='0.0.0.0', port=80, debug=True, use_reloader=False)
+    else:
+        logger.debug('Starting endless loop')
+        while True:
+            pass
     todo_schedule.stop()
     mail_schedule.stop()
