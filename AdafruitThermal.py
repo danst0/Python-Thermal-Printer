@@ -51,7 +51,7 @@ class AdafruitThermal(Serial):
     line_spacing     =  8
     barcode_height   = 50
     print_mode       =  0
-    default_heat_time = 90
+    default_heat_time = 120
 
     def __init__(self, *args, **kwargs):
         # If no parameters given, use default port & baud rate.
@@ -64,7 +64,10 @@ class AdafruitThermal(Serial):
             args = [ args[0], baudrate ]
         else:
             baudrate = args[1]
-        self.no_printing = kwargs.pop('no_printing')
+        try:
+            self.no_printing = kwargs.pop('no_printing')
+        except:
+            self.no_printing = False
         #print('NOPRINT', self.no_printing)
 
         # Calculate time to issue one byte to the printer.

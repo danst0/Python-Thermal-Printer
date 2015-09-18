@@ -3,7 +3,7 @@
 """[Th]ermal [Pr]inter
 
 Usage:
-thpr.py [-s | --no-server] [-v | --verbose] [-d | --no-deleting] [-p | --no-printing]
+thpr.py [-s | --no-server] [-v | --verbose] [-d | --no-deleting] [-p | --no-printing] [-r | --run-once]
 thpr.py (-h | --help)
 thpr.py --version
 
@@ -11,9 +11,10 @@ Options:
 -h --help           Show this help
 --version           Show version
 -s --no-server      Do not start Web server
--v --verbose          Enable debug logging
--d --no-deleting   Do not delete mails after printing
--p --no-printing   Do not print anything
+-v --verbose        Enable debug logging
+-d --no-deleting    Do not delete mails after printing
+-p --no-printing    Do not print anything
+-r --run-once       Run only one check, then exit
 
 
 
@@ -117,49 +118,6 @@ class Scheduler(object):
             self._t.cancel()
             self._t = None
 
-class PrinterTasks():
-    
-    def __init__(self, led_pin):
-        self.led_pin = led_pin
-    
-    def tap(self):
-        """Called when button is briefly tapped.  Invokes time/temperature script."""
-        GPIO.output(self.led_pin, GPIO.HIGH)  # LED on while working
-        subprocess.call(["python", "timetemp.py"])
-        GPIO.output(self.led_pin, GPIO.LOW)
-
-    def hold(self):
-        """Called when button is held down.  Prints image, invokes shutdown process."""
-        GPIO.output(self.led_pin, GPIO.HIGH)
-        printer.printImage(Image.open('gfx/goodbye.png'), True)
-        printer.feed(3)
-        subprocess.call("sync")
-        subprocess.call(["shutdown", "-h", "now"])
-        GPIO.output(self.led_pin, GPIO.LOW)
-
-    
-    def interval(self):
-        """Called at periodic intervals (30 seconds by default).
-            Invokes twitter script.
-        """
-        GPIO.output(self.led_pin, GPIO.HIGH)
-        p = subprocess.Popen(["python", "twitter.py", str(lastId)],
-                stdout=subprocess.PIPE)
-        GPIO.output(self.led_pin, GPIO.LOW)
-        return p.communicate()[0] # Script pipes back lastId, returned to main
-
-
-    
-    def daily(self):
-        """ Called once per day (6:30am by default).
-        
-            Invokes weather forecast and sudoku-gfx scripts.
-        """
-        GPIO.output(self.led_pin, GPIO.HIGH)
-        subprocess.call(["python", "forecast.py"])
-        subprocess.call(["python", "sudoku-gfx.py"])
-        GPIO.output(self.led_pin, GPIO.LOW)
-
 class MyThermalPrinter:
     """Thermal Printer class with added button and LED"""
 
@@ -167,15 +125,13 @@ class MyThermalPrinter:
 
     def __init__(self, *args, **kwargs):
         self.button_pin = int(kwargs.pop('button_pin'))
-        self.led_pin = int(kwargs.pop('led_pin'))
-        self.actions = kwargs.pop('actions')
+        LED_PIN = int(kwargs.pop('led_pin'))
         self.hold_time = int(kwargs.pop('hold_time'))
-        
         self.available = True
         self.tap_time = 0.01  # Debounce time for button taps
         self.next_interval = 0.0   # Time of next recurring operation
         self.daily_flag = False  # Set after daily trigger occurs
-        GPIO.setup(self.led_pin, GPIO.OUT)
+        GPIO.setup(LED_PIN, GPIO.OUT)
         GPIO.setup(self.button_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         self.tp = AdafruitThermal(*args, **kwargs)
         #self.available = False
@@ -184,8 +140,6 @@ class MyThermalPrinter:
         self.prev_time = time.time()
         self.tap_enable = False
         self.hold_enable = False
-
-
 
 
     def check_network(self):
@@ -199,14 +153,14 @@ class MyThermalPrinter:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.connect(('8.8.8.8', 0))
             if self.available:
-                GPIO.output(self.led_pin, GPIO.HIGH)
+                GPIO.output(LED_PIN, GPIO.HIGH)
                 #self.tp.print_line('My IP address is ' + s.getsockname()[0])
                 logger.debug('My IP address is ' + s.getsockname()[0])
                 #self.tp.feed(3)
-                GPIO.output(self.led_pin, GPIO.LOW)
+                GPIO.output(LED_PIN, GPIO.LOW)
         except:
             if self.available:
-                GPIO.output(self.led_pin, GPIO.HIGH)
+                GPIO.output(LED_PIN, GPIO.HIGH)
                 self.tp.bold_on()
                 self.tp.print_line('Network is unreachable.')
                 logger.debug('Network is unreachable.')
@@ -214,62 +168,114 @@ class MyThermalPrinter:
                 self.tp.print('Connect display and keyboard\n' + \
                               'for network troubleshooting.')
                 self.tp.feed(3)
-                GPIO.output(self.led_pin, GPIO.LOW)
+                GPIO.output(LED_PIN, GPIO.LOW)
             exit(0)
 
     def greeting(self):
-        GPIO.output(self.led_pin, GPIO.HIGH)
+        GPIO.output(LED_PIN, GPIO.HIGH)
         # Print greeting image
         if self.available:
             self.tp.print_image(Image.open('gfx/hello.png'), True)
             self.tp.feed(3)
-        GPIO.output(self.led_pin, GPIO.LOW)
+        GPIO.output(LED_PIN, GPIO.LOW)
 
     def query_button(self):
         # Poll current button state and time
         button_state = GPIO.input(self.button_pin)
         t = time.time()
-
         # Has button state changed?
         if button_state != self.prev_button_state:
+            if button_state:
+                GPIO.output(LED_PIN, GPIO.HIGH)
+            else:
+                GPIO.output(LED_PIN, GPIO.LOW)
+            #print('Button changed')
             self.prev_button_state = button_state   # Yes, save new state/time
             self.prev_time = t
         else:                             # Button state unchanged
             if (t - self.prev_time) >= self.hold_time:  # Button held more than 'holdTime'?
                 # Yes it has.  Is the hold action as-yet untriggered?
                 if self.hold_enable == True:        # Yep!
-                    self.actions.hold()                      # Perform hold action (usu. shutdown)
+                    print('Hold action to be exec')
+                    self.hold()                      # Perform hold action (usu. shutdown)
                     self.hold_enable = False          # 1 shot...don't repeat hold action
                     self.tap_enable  = False          # Don't do tap action on release
             elif (t - self.prev_time) >= self.tap_time: # Not holdTime.  tapTime elapsed?
+                #print('tap')
                 # Yes.  Debounced press or release...
                 if button_state == True:       # Button released?
+                    #print('button_state', button_state)
                     if self.tap_enable == True:       # Ignore if prior hold()
-                        self.actions.tap()                     # Tap triggered (button released)
+                        self.tap()                     # Tap triggered (button released)
+                        print('tap action executed')
                         self.hold_enable = False
                 else:                         # Button pressed
+                    
                     self.tap_enable  = True           # Enable tap and hold actions
                     self.hold_enable = True
+                    #print('tap_enable', self.tap_enable)
 
         # LED blinks while idle, for a brief interval every 2 seconds.
         # Pin 18 is PWM-capable and a "sleep throb" would be nice, but
         # the PWM-related library is a hassle for average users to install
         # right now.  Might return to this later when it's more accessible.
-        if ((int(t) & 1) == 0) and ((t - int(t)) < 0.15):
-            GPIO.output(self.led_pin, GPIO.HIGH)
+        if ((int(t) & 1) == 0) and ((t - int(t)) < 0.05):
+            GPIO.output(LED_PIN, GPIO.HIGH)
         else:
-            GPIO.output(self.led_pin, GPIO.LOW)
+            GPIO.output(LED_PIN, GPIO.LOW)
 
         # Once per day (currently set for 6:30am local time, or when script
         # is first run, if after 6:30am), run forecast and sudoku scripts.
         loc_time = time.localtime()
         if loc_time.tm_hour ==  6 and loc_time.tm_min == 30:
             if self.daily_flag == False:
-                self.actions.daily()
+                self.daily()
                 self.daily_flag = True
         else:
             self.daily_flag = False  # Reset daily trigger
 
+
+    def tap(self):
+        """Called when button is briefly tapped.  Invokes time/temperature script."""
+        GPIO.output(LED_PIN, GPIO.HIGH)  # LED on while working
+        subprocess.call(["python", "timetemp.py"])
+        GPIO.output(LED_PIN, GPIO.LOW)
+
+    def hold(self):
+        """Called when button is held down.  Prints image, invokes shutdown process."""
+        GPIO.output(LED_PIN, GPIO.HIGH)
+        self.tp.print_line('Switching off...')
+        self.tp.feed(3)
+        for i in range(10):
+            GPIO.output(LED_PIN, GPIO.HIGH)
+            time.sleep(0.5)
+            GPIO.output(LED_PIN, GPIO.LOW)
+        subprocess.call("sync")
+        subprocess.call(["shutdown", "-h", "now"])
+        GPIO.output(LED_PIN, GPIO.LOW)
+
+    
+    def interval(self):
+        """Called at periodic intervals (30 seconds by default).
+            Invokes twitter script.
+        """
+        GPIO.output(LED_PIN, GPIO.HIGH)
+        p = subprocess.Popen(["python", "twitter.py", str(lastId)],
+                stdout=subprocess.PIPE)
+        GPIO.output(LED_PIN, GPIO.LOW)
+        return p.communicate()[0] # Script pipes back lastId, returned to main
+
+
+    
+    def daily(self):
+        """ Called once per day (6:30am by default).
+        
+            Invokes weather forecast and sudoku-gfx scripts.
+        """
+        GPIO.output(LED_PIN, GPIO.HIGH)
+        subprocess.call(["python", "forecast.py"])
+        subprocess.call(["python", "sudoku-gfx.py"])
+        GPIO.output(LED_PIN, GPIO.LOW)
 
 class MailReceiver(object):
     def __init__(self, config, printer, no_deleting=False):
@@ -322,12 +328,14 @@ class MailReceiver(object):
             subject = decode_header(mail['subject'])[0]
             logger.debug('Output from decode header: {0}, encoding {1}'.format(subject[0], subject[1]))
             subject = subject[0]#.decode(subject[1])
-            logger.debug('Decoded subject {0}'.format(subject))            
+        
             sender = mail['from']
             recipient = mail['to']
             mail_text = None
             #print('Mail found: subject "{0}", From: {1}, To: {2}'.format(subject, sender, recipient))
             if sender != None and recipient != None:
+                
+                logger.debug('Decoded subject: {0}'.format(subject))    
             
                 found_valid_recipient = False
                 for val in self.valid_recipients:
@@ -346,6 +354,7 @@ class MailReceiver(object):
                         mail_text = None
                         file_name = None
                         for num, part in enumerate(mail.walk()):
+                            
                             logger.debug('---'*10)
                             logger.debug('Part No. {0}, Content type: :::{1}:::'.format(num, part.get_content_type()))
                             logger.debug('Part as string')
@@ -385,16 +394,19 @@ class MailReceiver(object):
                             mail_text = mail.get_payload(decode=True).strip(' \n\r')
                             logger.debug('MAILTEXT (Singlepart; length: {1}): {0}'.format(mail_text[:100], len(mail_text)))
                     if not message_with_image:
+                        GPIO.output(LED_PIN, GPIO.HIGH)
                         self.printer.justify('C')
                         self.printer.print_line(20*'-')
                         self.printer.bold_on()
                         self.printer.print_line(subject)
                         self.printer.bold_off()
                         if mail_text:
-                            self.printer.print(mail_text.strip())
+                            self.printer.print(mail_text)
                         self.printer.print_line(20*'-')
                         self.printer.justify('L')
+                        GPIO.output(LED_PIN, GPIO.LOW)
                     else:
+                        GPIO.output(LED_PIN, GPIO.HIGH)
                         self.printer.justify('C')
                         self.printer.print_line(20*'-')
                         self.printer.bold_on()
@@ -416,6 +428,7 @@ class MailReceiver(object):
 #                         self.printer.print_image(bw, True)
                         self.printer.print_line(20*'-')
                         self.printer.justify('L')
+                        GPIO.output(LED_PIN, GPIO.LOW)
                     to_be_deleted.append(msgId)
         if to_be_deleted and not self.no_deleting:
             logger.debug('IDs to be moved to trash: {0}'.format(to_be_deleted))
@@ -432,10 +445,7 @@ class MailReceiver(object):
                 
         imap_session.close()
         imap_session.logout()        
-        
-
-        
-                
+                   
 
 if __name__ == "__main__":
 
@@ -468,18 +478,16 @@ if __name__ == "__main__":
     HOLD_TIME = config['Printer']['timeout_for_hold']     # Duration for button hold (shutdown)
 
 
-    ACTIONS = PrinterTasks(LED_PIN)
     # Initialization of printer
-
     PRINTER = MyThermalPrinter(config['Printer']['serial_port'],
                                9600, timeout=5,
                                button_pin = BUTTON_PIN,
                                led_pin = LED_PIN,
                                hold_time = HOLD_TIME,
-                               actions = ACTIONS,
                                no_printing = arguments['--no-printing'])
+
     GPIO.output(LED_PIN, GPIO.HIGH)
-    time.sleep(0.5)
+    time.sleep(2.5)
     GPIO.output(LED_PIN, GPIO.LOW)
 
     if not PRINTER.available:
@@ -490,20 +498,20 @@ if __name__ == "__main__":
     #PRINTER.greeting()
     
     MR = MailReceiver(config, PRINTER.tp, no_deleting = arguments['--no-deleting'])
-    MR.check_mail()
+    #MR.check_mail()
     mail_schedule = Scheduler(60, MR.check_mail)
-    #mail_schedule.start()
-   
-   
-    todo_schedule = Scheduler(5, PRINTER.query_button)
-    todo_schedule.start()
+    todo_schedule = Scheduler(0.05, PRINTER.query_button)
+    if not arguments['--run-once']:
+        #mail_schedule.start()
+        todo_schedule.start()
 
     if not arguments['--no-server']:
         logger.debug('Starting server')
         webapp.run(host='0.0.0.0', port=80, debug=True, use_reloader=False)
-    else:
+    elif not arguments['--run-once']:
         logger.debug('Starting endless loop')
         while True:
             pass
-    todo_schedule.stop()
-    mail_schedule.stop()
+    if not arguments['--run-once']:
+        todo_schedule.stop()
+        #mail_schedule.stop()
